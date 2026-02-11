@@ -1,0 +1,5 @@
+{
+  "name": "Thiia AI",
+  "description": "A browser-based AI-powered development environment featuring code execution, intelligent chat assistance with multiple Gemini models (Flash Lite & Pro), and project management.",
+  "requestFramePermissions": []
+}
