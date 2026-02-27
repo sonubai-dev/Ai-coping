@@ -1,4 +1,4 @@
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenAI, ThinkingLevel } from "@google/genai";
 import { AIComplexity, DebugStep } from "../types";
 
 // Initialize Gemini Client
@@ -57,7 +57,8 @@ export const generateResponse = async (
   history: { role: string; parts: { text: string }[] }[] = []
 ): Promise<string> => {
   let modelName = 'gemini-2.5-flash-lite-latest'; // Default for low complexity/fast response
-  let thinkingBudget = 0;
+  let thinkingConfig: any = undefined;
+  
   let systemInstruction = `You are Thiia AI, an advanced intelligent coding assistant. 
       Current Context Code:
       \`\`\`
@@ -69,8 +70,8 @@ export const generateResponse = async (
       `;
 
   if (complexity === 'high') {
-    modelName = 'gemini-3-pro-preview';
-    thinkingBudget = 32768; // Max budget for deep reasoning
+    modelName = 'gemini-3.1-pro-preview';
+    thinkingConfig = { thinkingLevel: ThinkingLevel.HIGH };
   } else if (complexity === 'research') {
     modelName = 'gemini-3-flash-preview'; 
   }
@@ -79,8 +80,8 @@ export const generateResponse = async (
     systemInstruction,
   };
 
-  if (thinkingBudget > 0) {
-    config.thinkingConfig = { thinkingBudget };
+  if (thinkingConfig) {
+    config.thinkingConfig = thinkingConfig;
   }
 
   try {
@@ -107,6 +108,48 @@ export const generateResponse = async (
     } catch (fallbackError: any) {
       return `Error: Service unavailable. Primary: ${error.message}. Backup: ${fallbackError.message}`;
     }
+  }
+};
+
+export const generateCode = async (
+  prompt: string,
+  language: string,
+  existingCode: string
+): Promise<string> => {
+  const systemInstruction = `You are an expert coding assistant.
+      Your task is to generate ${language} code based on the user's request.
+      
+      Context:
+      The user is working on a file with the following content:
+      \`\`\`${language}
+      ${existingCode}
+      \`\`\`
+      
+      Rules:
+      1. Return ONLY the code. Do not include markdown formatting (like \`\`\`) or explanations unless requested as comments.
+      2. If the user asks to modify existing code, return the FULL updated code for the file, or a self-contained snippet if clear.
+      3. Prefer modern, clean, and efficient code.
+      4. If the request is ambiguous, generate the most likely useful code.
+  `;
+
+  try {
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash-latest',
+      contents: prompt,
+      config: {
+        systemInstruction,
+        temperature: 0.2, // Lower temperature for more deterministic code
+      }
+    });
+
+    let code = response.text || "";
+    // Strip markdown if the model ignores the rule
+    code = code.replace(/^```[a-z]*\n/i, '').replace(/\n```$/, '');
+    return code;
+
+  } catch (error: any) {
+    console.error("Generate Code Error:", error);
+    return `// Error generating code: ${error.message}`;
   }
 };
 

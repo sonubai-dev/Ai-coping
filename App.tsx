@@ -440,7 +440,7 @@ const ChatInterface = ({
           </button>
           <button 
             onClick={() => setComplexity('high')}
-            title="Gemini Pro (Deep Thinking)"
+            title="Gemini 3.1 Pro (Deep Thinking)"
             className={`p-1.5 rounded text-xs transition ${complexity === 'high' ? 'bg-purple-600 text-white' : 'text-zinc-400 hover:text-white'}`}
           >
             <Icon name="brain" />
@@ -500,7 +500,7 @@ const ChatInterface = ({
         </div>
         <div className="text-[10px] text-zinc-600 mt-2 text-center">
           {complexity === 'low' && "⚡ Using gemini-2.5-flash-lite for instant answers"}
-          {complexity === 'high' && "🧠 Using gemini-3-pro with thinking capability"}
+          {complexity === 'high' && "🧠 Using gemini-3.1-pro with deep thinking"}
           {complexity === 'research' && "📚 Using gemini-3-flash for detailed research"}
         </div>
       </form>
@@ -530,6 +530,39 @@ export default function App() {
     breakpoints: [],
     variables: {}
   });
+
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [showGenerateModal, setShowGenerateModal] = useState(false);
+  const [generatePrompt, setGeneratePrompt] = useState("");
+
+  const handleGenerateClick = () => {
+    if (!activeFile) return;
+    setGeneratePrompt("");
+    setShowGenerateModal(true);
+  };
+
+  const handleGenerateConfirm = async () => {
+    if (!activeFile || !generatePrompt.trim()) return;
+    
+    setShowGenerateModal(false);
+    setIsGenerating(true);
+    
+    try {
+      // Dynamic import to avoid circular dependency issues if any
+      const { generateCode } = await import('./services/geminiService');
+      const generated = await generateCode(generatePrompt, activeFile.language, activeFile.content);
+      
+      const newContent = activeFile.content 
+        ? `${activeFile.content}\n\n${generated}`
+        : generated;
+        
+      handleFileChange(newContent);
+    } catch (e) {
+      alert("Failed to generate code");
+    } finally {
+      setIsGenerating(false);
+    }
+  };
 
   // Load User / Session
   useEffect(() => {
@@ -816,7 +849,7 @@ export default function App() {
       id: crypto.randomUUID(),
       role: 'assistant',
       content: aiText,
-      model: complexity === 'high' ? 'gemini-3-pro' : complexity === 'research' ? 'gemini-3-flash' : 'gemini-2.5-flash-lite',
+      model: complexity === 'high' ? 'gemini-3.1-pro' : complexity === 'research' ? 'gemini-3-flash' : 'gemini-2.5-flash-lite',
       timestamp: Date.now()
     };
     
@@ -893,6 +926,47 @@ export default function App() {
                  <span className="text-zinc-200 font-medium">{activeFile?.name}</span>
                </div>
                <div className="flex items-center gap-2">
+                 {/* AI Actions */}
+                 <button 
+                   onClick={() => handleSendMessage("Explain the code in the current file in detail, covering its purpose, key functions, and logic.", 'high')}
+                   disabled={isAiTyping}
+                   className="flex items-center gap-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 px-3 py-1.5 rounded text-sm transition font-medium border border-zinc-700 disabled:opacity-50"
+                   title="Explain Code"
+                 >
+                   {isAiTyping ? (
+                     <Icon name="circle-notch" className="fa-spin text-yellow-500 text-xs" />
+                   ) : (
+                     <Icon name="lightbulb" className="text-yellow-500 text-xs" />
+                   )}
+                   <span className="hidden lg:inline">Explain</span>
+                 </button>
+                 <button 
+                   onClick={() => handleSendMessage("Suggest improvements for this code, focusing on performance, readability, and best practices.", 'high')}
+                   disabled={isAiTyping}
+                   className="flex items-center gap-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 px-3 py-1.5 rounded text-sm transition font-medium border border-zinc-700 disabled:opacity-50"
+                   title="Suggest Improvements"
+                 >
+                   {isAiTyping ? (
+                     <Icon name="circle-notch" className="fa-spin text-purple-400 text-xs" />
+                   ) : (
+                     <Icon name="wand-magic-sparkles" className="text-purple-400 text-xs" />
+                   )}
+                   <span className="hidden lg:inline">Improve</span>
+                 </button>
+                 <button 
+                   onClick={handleGenerateClick}
+                   disabled={isGenerating}
+                   className="flex items-center gap-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 px-3 py-1.5 rounded text-sm transition font-medium border border-zinc-700 disabled:opacity-50"
+                   title="Generate Code"
+                 >
+                   {isGenerating ? (
+                     <Icon name="circle-notch" className="fa-spin text-blue-400 text-xs" />
+                   ) : (
+                     <Icon name="code" className="text-blue-400 text-xs" />
+                   )}
+                   <span className="hidden lg:inline">{isGenerating ? 'Generating...' : 'Generate'}</span>
+                 </button>
+
                  {/* Regular Run */}
                  {!debugState.isActive && (
                     <button 
@@ -955,6 +1029,67 @@ export default function App() {
           <p className="text-sm mt-2 max-w-md text-center">
             Thiia AI combines local execution with intelligent cloud assistance.
           </p>
+        </div>
+      )}
+      
+      {/* Code Generation Modal */}
+      {showGenerateModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-xl shadow-2xl w-[500px] overflow-hidden transform transition-all">
+            <div className="p-4 border-b border-zinc-800 flex justify-between items-center bg-zinc-900/50">
+              <h3 className="text-zinc-200 font-semibold flex items-center gap-2">
+                <Icon name="code" className="text-indigo-500" />
+                Generate Code
+              </h3>
+              <button 
+                onClick={() => setShowGenerateModal(false)}
+                className="text-zinc-500 hover:text-zinc-300 transition"
+              >
+                <Icon name="xmark" />
+              </button>
+            </div>
+            
+            <div className="p-6 space-y-4">
+              <div className="space-y-2">
+                <label className="text-xs font-medium text-zinc-400 uppercase tracking-wider">
+                  Describe what you want to build
+                </label>
+                <textarea
+                  autoFocus
+                  value={generatePrompt}
+                  onChange={(e) => setGeneratePrompt(e.target.value)}
+                  placeholder="E.g., Create a React component for a user profile card with avatar and stats..."
+                  className="w-full h-32 bg-zinc-950 border border-zinc-800 rounded-lg p-3 text-zinc-300 text-sm focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/50 resize-none placeholder:text-zinc-600"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+                      handleGenerateConfirm();
+                    }
+                  }}
+                />
+                <p className="text-[10px] text-zinc-500 flex justify-between">
+                  <span>The generated code will be appended to your current file.</span>
+                  <span>Press Cmd+Enter to submit</span>
+                </p>
+              </div>
+            </div>
+            
+            <div className="p-4 border-t border-zinc-800 bg-zinc-900/50 flex justify-end gap-2">
+              <button 
+                onClick={() => setShowGenerateModal(false)}
+                className="px-4 py-2 rounded-lg text-sm font-medium text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 transition"
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={handleGenerateConfirm}
+                disabled={!generatePrompt.trim()}
+                className="px-4 py-2 rounded-lg text-sm font-medium bg-indigo-600 text-white hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed transition flex items-center gap-2 shadow-lg shadow-indigo-500/20"
+              >
+                <Icon name="wand-magic-sparkles" />
+                Generate
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
